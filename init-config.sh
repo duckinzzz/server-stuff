@@ -99,4 +99,7 @@ EOF
     sudo chmod +x "$PROFILE_SCRIPT"
 fi
 
+sudo chmod -x /etc/update-motd.d/[0-9]*
+sudo chmod +x /etc/update-motd.d/99-docker
+
 echo "Initial config installed"
