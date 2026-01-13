@@ -1,13 +1,64 @@
 #!/bin/bash
 
-# ps1 coloring
-echo 'PS1="\[\e[38;5;208m\]\u@myserver\[\e[0m\]:\[\e[38;5;75m\]\w\[\e[0m\]$ "' >> ~/.bashrc
+BASHRC="$HOME/.bashrc"
 
-echo 'alias cls="clear"' >> ~/.bashrc
+grep -q 'PS1=.*myserver' "$BASHRC" || cat >> "$BASHRC" <<'EOF'
+# Custom PS1
+PS1="\[\e[38;5;208m\]\u@myserver\[\e[0m\]:\[\e[38;5;75m\]\w\[\e[0m\]$ "
+# Aliases
+alias cls="clear"
+EOF
 
-source ~/.bashrc
+source "$BASHRC" 2>/dev/null || true
 
-sudo tee /etc/update-motd.d/99-docker > /dev/null <<'EOF'
+MOTD_SCRIPT="/etc/update-motd.d/99-docker"
+
+if [ -d /etc/update-motd.d ]; then
+    sudo tee "$MOTD_SCRIPT" > /dev/null <<'EOF'
+#!/bin/bash
+
+echo "-----------------WELCOME-------------------"
+echo
+echo "🖥  Host: $(hostname)"
+echo "⏱  Uptime: $(uptime -p)"
+echo
+
+# Docker status
+if command -v docker >/dev/null 2>&1; then
+    echo "🐳 Docker containers:"
+    echo
+    printf "%-2s %-25s %s\n" "" "NAME" "STATUS"
+    echo "-------------------------------------------"
+
+    mapfile -t containers < <(docker ps -a --format "{{.Names}}\t{{.Status}}" 2>/dev/null)
+
+    if [ ${#containers[@]} -eq 0 ]; then
+        echo "🟡 Docker not running"
+    else
+        for line in "${containers[@]}"; do
+            name=$(echo "$line" | cut -f1)
+            status=$(echo "$line" | cut -f2-)
+            case "$status" in
+                Up*)    icon="🟢" ;;
+                Exited*) icon="🔴" ;;
+                *)       icon="🟡" ;;
+            esac
+            printf "%-2s %-25s %s\n" "$icon" "$name" "$status"
+        done
+    fi
+else
+    echo "🔴 Docker not installed"
+fi
+
+echo "-------------------------------------------"
+EOF
+
+    sudo chmod +x "$MOTD_SCRIPT"
+fi
+
+PROFILE_SCRIPT="/etc/profile.d/99-docker.sh"
+if [ ! -d /etc/update-motd.d ] && [ -w /etc/profile.d ]; then
+    sudo tee "$PROFILE_SCRIPT" > /dev/null <<'EOF'
 #!/bin/bash
 
 echo "-----------------WELCOME-------------------"
@@ -19,29 +70,25 @@ echo
 if command -v docker >/dev/null 2>&1; then
     echo "🐳 Docker containers:"
     echo
-    
-    # Заголовок таблицы
     printf "%-2s %-25s %s\n" "" "NAME" "STATUS"
     echo "-------------------------------------------"
 
-    # Список контейнеров
-	mapfile -t containers < <(docker ps -a --format "{{.Names}}\t{{.Status}}" 2>/dev/null)
+    mapfile -t containers < <(docker ps -a --format "{{.Names}}\t{{.Status}}" 2>/dev/null)
 
-	if [ ${#containers[@]} -eq 0 ]; then
-		echo "🟡 Docker not running"
-	else
-		for line in "${containers[@]}"; do
-			name=$(echo "$line" | cut -f1)
-			status=$(echo "$line" | cut -f2-)
-			case "$status" in
-				Up*)    icon="🟢" ;;
-				Exited*) icon="🔴" ;;
-				*)       icon="🟡" ;;
-			esac
-			printf "%-2s %-25s %s\n" "$icon" "$name" "$status"
-		done
-	fi
-
+    if [ ${#containers[@]} -eq 0 ]; then
+        echo "🟡 Docker not running"
+    else
+        for line in "${containers[@]}"; do
+            name=$(echo "$line" | cut -f1)
+            status=$(echo "$line" | cut -f2-)
+            case "$status" in
+                Up*)    icon="🟢" ;;
+                Exited*) icon="🔴" ;;
+                *)       icon="🟡" ;;
+            esac
+            printf "%-2s %-25s %s\n" "$icon" "$name" "$status"
+        done
+    fi
 else
     echo "🔴 Docker not installed"
 fi
@@ -49,6 +96,7 @@ fi
 echo "-------------------------------------------"
 EOF
 
-sudo chmod +x /etc/update-motd.d/99-docker
+    sudo chmod +x "$PROFILE_SCRIPT"
+fi
 
-echo "Config installed"
+echo "Initial config installed"
