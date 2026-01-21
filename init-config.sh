@@ -2,9 +2,9 @@
 
 BASHRC="$HOME/.bashrc"
 
-grep -q 'PS1=.*myserver' "$BASHRC" || cat >> "$BASHRC" <<'EOF'
+grep -q 'PS1=.*my-server' "$BASHRC" || cat >> "$BASHRC" <<'EOF'
 # Custom PS1
-PS1="\[\e[38;5;208m\]\u@myserver\[\e[0m\]:\[\e[38;5;75m\]\w\[\e[0m\]$ "
+PS1="\[\e[38;5;208m\]\u@my-server\[\e[0m\]:\[\e[38;5;75m\]\w\[\e[0m\]$ "
 # Aliases
 alias cls="clear"
 EOF
