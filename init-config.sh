@@ -1,13 +1,30 @@
 #!/bin/bash
 
 BASHRC="$HOME/.bashrc"
+MY_HOST="my-server"
 
-grep -q 'PS1=.*my-server' "$BASHRC" || cat >> "$BASHRC" <<'EOF'
+START_MARK="# >>> CUSTOM PS1 BLOCK >>>"
+END_MARK="# <<< CUSTOM PS1 BLOCK <<<"
+
+read -r -d '' CUSTOM_BLOCK <<EOF
+$START_MARK
 # Custom PS1
-PS1="\[\e[38;5;208m\]\u@my-server\[\e[0m\]:\[\e[38;5;75m\]\w\[\e[0m\]$ "
+HOST_NAME="$MY_HOST"
+PS1="\\[\\e[38;5;208m\\]\\u@\$HOST_NAME\\[\\e[0m\\]:\\[\\e[38;5;75m\\]\\w\\[\\e[0m\\]\\$ "
 # Aliases
 alias cls="clear"
+alias motd='run-parts /etc/update-motd.d/'
+$END_MARK
 EOF
+
+if grep -q "$START_MARK" "$BASHRC"; then
+    # Перезаписываем существующий блок
+    sed -i "/$START_MARK/,/$END_MARK/c\\
+$CUSTOM_BLOCK
+" "$BASHRC"
+else
+    echo "$CUSTOM_BLOCK" >> "$BASHRC"
+fi
 
 source "$BASHRC" 2>/dev/null || true
 
