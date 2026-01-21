@@ -1,7 +1,7 @@
 ### Initial config for clean machine
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/duckinzzz/server-stuff/main/init-config.sh | bash
+. <(curl -fsSL https://raw.githubusercontent.com/duckinzzz/server-stuff/main/init-config.sh)
 ```
 #### MOTD:
 ```text
