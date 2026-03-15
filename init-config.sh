@@ -32,9 +32,11 @@ MOTD_SCRIPT="/etc/update-motd.d/99-docker"
 
 sudo tee "$MOTD_SCRIPT" >/dev/null <<'EOF'
 #!/usr/bin/env bash
+IP=$(ip route get 1.1.1.1 | awk '{print $7; exit}')
 
 echo "-----------------ABOBA-------------------"
 echo
+echo "🌐 IP: $IP"
 echo "🖥  Host: $(hostname)"
 echo "⏱  Uptime: $(uptime -p)"
 echo
@@ -98,7 +100,6 @@ for project in "${!projects[@]}"; do
         printf "%s %s %-22s %s\n" "$prefix" "$icon" "$name" "$status"
     done
 
-    echo
 done
 
 echo "-------------------------------------------"
