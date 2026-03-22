@@ -72,15 +72,27 @@ for line in "${containers[@]}"; do
     projects["$project"]+="$name|$status"$'\n'
 done
 
-for project in "${!projects[@]}"; do
-    echo "$project"
+# сначала выводим только стэки (где >1 контейнера)
+printed_stacks=0
+printed_single_header=0
 
+for project in "${!projects[@]}"; do
     mapfile -t items <<< "${projects[$project]}"
 
-    count=${#items[@]}
+    filtered=()
+    for line in "${items[@]}"; do
+        [ -z "$line" ] && continue
+        filtered+=("$line")
+    done
 
-    for ((i=0;i<count-1;i++)); do
-        line=${items[$i]}
+    count=${#filtered[@]}
+    [ "$count" -le 1 ] && continue
+
+    printed_stacks=1
+    echo "$project"
+
+    for ((i=0; i<count; i++)); do
+        line=${filtered[$i]}
 
         name=$(echo "$line" | cut -d'|' -f1)
         status=$(echo "$line" | cut -d'|' -f2)
@@ -91,7 +103,7 @@ for project in "${!projects[@]}"; do
             *) icon="🟡" ;;
         esac
 
-        if [ $i -eq $((count-2)) ]; then
+        if [ $i -eq $((count-1)) ]; then
             prefix="└──"
         else
             prefix="├──"
@@ -99,7 +111,39 @@ for project in "${!projects[@]}"; do
 
         printf "%s %s %-22s %s\n" "$prefix" "$icon" "$name" "$status"
     done
+done
 
+# потом выводим одиночные контейнеры
+for project in "${!projects[@]}"; do
+    mapfile -t items <<< "${projects[$project]}"
+
+    filtered=()
+    for line in "${items[@]}"; do
+        [ -z "$line" ] && continue
+        filtered+=("$line")
+    done
+
+    count=${#filtered[@]}
+    [ "$count" -ne 1 ] && continue
+
+    # вставить пустую строку только один раз перед первым одиночным контейнером
+    if [ "$printed_stacks" -eq 1 ] && [ "$printed_single_header" -eq 0 ]; then
+        echo
+        printed_single_header=1
+    fi
+
+    line=${filtered[0]}
+
+    name=$(echo "$line" | cut -d'|' -f1)
+    status=$(echo "$line" | cut -d'|' -f2)
+
+    case "$status" in
+        Up*) icon="🟢" ;;
+        Exited*) icon="🔴" ;;
+        *) icon="🟡" ;;
+    esac
+
+    printf " ── %s %-22s %s\n" "$icon" "$name" "$status"
 done
 
 echo "-------------------------------------------"
