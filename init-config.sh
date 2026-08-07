@@ -1,18 +1,16 @@
 #!/usr/bin/env bash
 set -e
 
-# ── Определяем активный шелл ──────────────────────────────────────────────────
-CURRENT_SHELL="$(ps -p $$ -o comm= 2>/dev/null || basename "$SHELL")"
-case "$CURRENT_SHELL" in
-    zsh)  RC_FILE="$HOME/.zshrc" ;;
-    bash) RC_FILE="$HOME/.bashrc" ;;
-    *)    RC_FILE="$HOME/.bashrc" ;;
-esac
+RC_FILE="$HOME/.zshrc"
+START_MARK="# >>> CUSTOM ZSH BLOCK >>>"
+END_MARK="# <<< CUSTOM ZSH BLOCK <<<"
 
-START_MARK="# >>> CUSTOM PS1 BLOCK >>>"
-END_MARK="# <<< CUSTOM PS1 BLOCK <<<"
+# Sentinel flag for "already installed". Until it exists, the install runs.
+# Subsequent runs only change the hostname and prompt color.
+SENTINEL="$HOME/.init-config.done"
+FRESH_INSTALL=0
 
-# ── Функция чистой перезаписи блока ───────────────────────────────────────────
+# ── Clean block rewrite helper ─────────────────────────────────────────────────
 remove_block() {
     local file="$1"
     if grep -q "$START_MARK" "$file" 2>/dev/null; then
@@ -30,23 +28,57 @@ remove_block() {
     fi
 }
 
-# ── Интерактивный ввод ────────────────────────────────────────────────────────
+# ═══ 1. INSTALL (one-time) ═════════════════════════════════════════════════════
+if [ ! -f "$SENTINEL" ]; then
+    echo "=== Installing zsh and plugins ==="
+
+    if ! command -v sudo >/dev/null 2>&1; then
+        echo "sudo is required for installation." >&2
+        exit 1
+    fi
+
+    sudo apt update
+    sudo apt install -y \
+        zsh \
+        git curl \
+        zsh-autosuggestions \
+        zsh-syntax-highlighting \
+        zoxide \
+        fzf
+
+    # zsh-completions is not in apt — clone from GitHub
+    if [ ! -d "$HOME/.zsh-completions" ]; then
+        echo "=== Cloning zsh-completions ==="
+        git clone --depth 1 https://github.com/zsh-users/zsh-completions "$HOME/.zsh-completions"
+    fi
+
+    # Make zsh the default login shell
+    if [ "$(basename "$SHELL")" != "zsh" ]; then
+        echo "=== Setting zsh as default shell ==="
+        sudo chsh -s "$(command -v zsh)" "$USER"
+    fi
+
+    touch "$SENTINEL"
+    FRESH_INSTALL=1
+fi
+
+# ═══ 2. INTERACTIVE (at the end) ═══════════════════════════════════════════════
 echo ""
 echo "=== init-config setup ==="
 echo ""
-echo "Введи имя сервера (например: prod-01, dev-box):"
+echo "Enter server name (e.g. prod-01, dev-box):"
 read -r HOST_NAME </dev/tty
 HOST_NAME="${HOST_NAME:-my-server}"
 
 echo ""
-echo "Выбери цвет промпта (для user@host):"
-printf "  1) \e[38;5;208muser@${HOST_NAME}\e[0m  (оранжевый)\n"
-printf "  2) \e[38;5;82muser@${HOST_NAME}\e[0m  (зелёный)\n"
-printf "  3) \e[38;5;75muser@${HOST_NAME}\e[0m  (синий)\n"
-printf "  4) \e[38;5;135muser@${HOST_NAME}\e[0m  (фиолетовый)\n"
-printf "  5) \e[38;5;196muser@${HOST_NAME}\e[0m  (красный)\n"
-printf "  6) \e[38;5;213muser@${HOST_NAME}\e[0m  (розовый)\n"
-printf "  7) \e[38;5;255muser@${HOST_NAME}\e[0m  (белый)\n"
+echo "Choose prompt color (for user@host):"
+printf "  1) \e[38;5;208muser@${HOST_NAME}\e[0m  (orange)\n"
+printf "  2) \e[38;5;82muser@${HOST_NAME}\e[0m  (green)\n"
+printf "  3) \e[38;5;75muser@${HOST_NAME}\e[0m  (blue)\n"
+printf "  4) \e[38;5;135muser@${HOST_NAME}\e[0m  (purple)\n"
+printf "  5) \e[38;5;196muser@${HOST_NAME}\e[0m  (red)\n"
+printf "  6) \e[38;5;213muser@${HOST_NAME}\e[0m  (pink)\n"
+printf "  7) \e[38;5;255muser@${HOST_NAME}\e[0m  (white)\n"
 read -r COLOR_CHOICE </dev/tty
 
 case "$COLOR_CHOICE" in
@@ -61,30 +93,60 @@ case "$COLOR_CHOICE" in
 esac
 
 echo ""
-echo "✅ Шелл:  $CURRENT_SHELL → $RC_FILE"
-echo "✅ Хост:  $HOST_NAME"
-printf "✅ Цвет:  \e[38;5;${COLOR_CODE}muser@${HOST_NAME}\e[0m\n"
+echo "Install Docker? (Y/n):"
+read -r DOCKER_ANSWER </dev/tty
+case "$DOCKER_ANSWER" in
+    [Nn]|[Nn][Oo]) DOCKER_INSTALL=0 ;;
+    *) DOCKER_INSTALL=1 ;;
+esac
+
+echo ""
+echo "✅ Shell:  zsh (default)"
+echo "✅ Host:   $HOST_NAME"
+printf "✅ Color:  \e[38;5;${COLOR_CODE}muser@${HOST_NAME}\e[0m\n"
+if [ "$DOCKER_INSTALL" -eq 1 ]; then
+    echo "✅ Docker: install"
+else
+    echo "✅ Docker: skip"
+fi
 echo ""
 
-# ── Блок конфига ──────────────────────────────────────────────────────────────
-if [ "$CURRENT_SHELL" = "zsh" ]; then
-    PS1_LINE="PS1=\"%F{$COLOR_CODE}%n@${HOST_NAME}%f:%F{75}%~%f\$ \""
-else
-    PS1_LINE="PS1=\"\\\\[\\\\e[38;5;${COLOR_CODE}m\\\\]\\\\u@${HOST_NAME}\\\\[\\\\e[0m\\\\]:\\\\[\\\\e[38;5;75m\\\\]\\\\w\\\\[\\\\e[0m\\\\]\\\\$ \""
-fi
+# ═══ 3. ~/.zshrc CONFIG ═══════════════════════════════════════════════════════
+PS1_LINE="PS1=\"%F{$COLOR_CODE}%n@${HOST_NAME}%f:%F{75}%~%f\$ \""
 
 CUSTOM_BLOCK="
 ${START_MARK}
+# --- History (persists across reconnects / disconnects) ---
+HISTFILE=~/.zsh_history
+HISTSIZE=10000
+SAVEHIST=10000
+setopt INC_APPEND_HISTORY
+setopt HIST_IGNORE_DUPS
+setopt SHARE_HISTORY
+
+# --- Completion ---
+autoload -Uz compinit && compinit
+zstyle ':completion:*' menu select
+zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'
+
+# --- Plugins ---
+fpath+=~/.zsh-completions
+source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+
+# --- Directory jumping (zoxide) ---
+eval \"\$(zoxide init zsh)\"
+
+# --- PS1 ---
 HOST_NAME=\"${HOST_NAME}\"
 ${PS1_LINE}
 alias motd='run-parts /etc/update-motd.d/'
 ${END_MARK}"
 
-# ── Пишем в rc-файл ───────────────────────────────────────────────────────────
 remove_block "$RC_FILE"
 echo "$CUSTOM_BLOCK" >> "$RC_FILE"
 
-# ── MOTD скрипт ───────────────────────────────────────────────────────────────
+# ═══ 4. MOTD script ═══════════════════════════════════════════════════════════
 MOTD_SCRIPT="/etc/update-motd.d/99-docker"
 sudo tee "$MOTD_SCRIPT" >/dev/null <<'EOF'
 #!/usr/bin/env bash
@@ -172,8 +234,29 @@ EOF
 
 sudo chmod +x "$MOTD_SCRIPT"
 
-# ── Применяем в текущую сессию ────────────────────────────────────────────────
+# ═══ 5. Docker (optional) ══════════════════════════════════════════════════════
+if [ "$DOCKER_INSTALL" -eq 1 ]; then
+    if command -v docker >/dev/null 2>&1; then
+        echo "🐳 Docker already installed — skipping."
+    else
+        echo "=== Installing Docker ==="
+        curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+        sudo sh /tmp/get-docker.sh
+        sudo usermod -aG docker "$USER"
+        echo "🐳 Docker installed. Log back in to apply the docker group."
+    fi
+fi
+
+# ═══ 6. Apply ═════════════════════════════════════════════════════════════════
 # shellcheck disable=SC1090
 source "$RC_FILE" 2>/dev/null || true
 
-echo "✅ Initial config installed. Рестартни шелл или запусти: source $RC_FILE"
+echo ""
+if [ -f "$SENTINEL" ] && [ "$FRESH_INSTALL" -eq 0 ]; then
+    echo "🔄 Config updated: host '$HOST_NAME', color '$COLOR_CODE'."
+    echo "   (packages already installed previously)"
+else
+    echo "✅ Installed: zsh + plugins + zoxide + fzf."
+    echo "✅ zsh is now the default shell (log out or run: exec zsh)"
+fi
+echo "✅ Config written to $RC_FILE"

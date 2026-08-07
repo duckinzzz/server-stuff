@@ -3,6 +3,19 @@
 ```bash
 . <(curl -fsSL https://raw.githubusercontent.com/duckinzzz/server-stuff/main/init-config.sh)
 ```
+
+Idempotent setup script. First run installs everything; later runs only update hostname/prompt color.
+
+**What it sets up:**
+- zsh (default shell) + history persistence, completion, zsh-autosuggestions, zsh-syntax-highlighting, zsh-completions
+- zoxide (dir jumping) + fzf
+- Custom PS1 (hostname + color)
+- Optional Docker install (prompt, default yes)
+- MOTD showing docker containers
+
+**Re-run:** `./init-config.sh` — updates name/color only.
+**Force full reinstall:** `rm ~/.init-config.done && ./init-config.sh`
+
 #### MOTD:
 ```text
 -----------------WELCOME-------------------
